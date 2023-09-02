@@ -4,13 +4,14 @@ import express from 'express';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
 import 'dotenv/config'
+import encrypt from 'mongoose-encryption';
 
 // consts
 const app = express();
 const PORT = process.env.PORT;
 const dbURL = 'mongodb://localhost:27017/';
 const dbName = 'userDB';
-
+const encrytionSecret = process.env.secretKey;
 
 //midllewares
 app.use(express.static('./public'));
@@ -28,6 +29,9 @@ const UserSchema = new mongoose.Schema({
     email: String,
     password: String
 });
+
+// before creating the model its important to use the encrytion plugin before the model
+UserSchema.plugin(encrypt, {secret: encrytionSecret, encryptedFields: ['password']});
 
 // crerating data model
 const User = mongoose.model('users', UserSchema);
@@ -52,8 +56,8 @@ app.post('/login', async (req, res) => {
     // now we check this info against our db
     try {
         const foundUser = await User.findOne({email:username}); // thie will search 
-        console.log(foundUser.email);
-        console.log(foundUser.password);
+        // console.log(foundUser.email);
+        // console.log(foundUser.password);
         if((foundUser.email === username) && (foundUser.password === password) ) {
             res.render('secrets.ejs')
         }else {
