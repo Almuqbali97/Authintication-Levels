@@ -1,9 +1,9 @@
 // there are some notes at the bottom
 // 09 / 02 / 2023 => by Musaab almuqbali
+import 'dotenv/config' // good practice to put it at the top
 import express from 'express';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
-import 'dotenv/config'
 import encrypt from 'mongoose-encryption';
 
 // consts
@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT;
 const dbURL = 'mongodb://localhost:27017/';
 const dbName = 'userDB';
-const encrytionSecret = process.env.secretKey;
+const encrytionSecret = process.env.SECRET_KEY;
 
 //midllewares
 app.use(express.static('./public'));
@@ -60,12 +60,14 @@ app.post('/login', async (req, res) => {
         // console.log(foundUser.password);
         if((foundUser.email === username) && (foundUser.password === password) ) {
             res.render('secrets.ejs')
-        }else {
+        } else {
             res.send('user not found or passowrd not correct')
         }
     } catch (error) {
-        console.log(message.error);
-        res.send(error)
+        console.log(error);
+        res.render('login.ejs', {
+            warning: 'incorrect entries'
+        });
     }
 });
 
@@ -92,8 +94,8 @@ app.post('/register', (req, res) => {
         // so if there is no registration error the secret page will be shown
         res.render('secrets.ejs');
     } catch (error) {
-        console.error(message.error);
-        res.send(error);        
+        console.error(error);
+        res.redirect('/register');        
     }
 });
 
@@ -110,6 +112,17 @@ app.listen(PORT, () => {
 
 
 
+
+// important note, for each security level step i add, the previous one wont work in some cases,
+// for example when i added the encrytipn to the password, the basic auth method dosnt work with same code
+// because the previous password doesnt have encrytion tobe decrypted
 // security levels
 
-// level 1 :  creating a username and a passowrd and store them in our db adn compare the to user inputs 
+// level 1 : basic auth creating a username and a passowrd and store them in our db adn compare the to user inputs 
+// user: user@basic, pass: basic123
+
+// level 2 : encrypting the password, i used mongoose-encryption np
+// user : user@encrypt, pass: encrypt123
+
+// level 3 : hashing the password using md5 package 
+// user: user@hash, password hash123
