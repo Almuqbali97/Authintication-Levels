@@ -5,6 +5,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
 import encrypt from 'mongoose-encryption';
+import md5 from 'md5';
 
 // consts
 const app = express();
@@ -31,7 +32,7 @@ const UserSchema = new mongoose.Schema({
 });
 
 // before creating the model its important to use the encrytion plugin before the model
-UserSchema.plugin(encrypt, {secret: encrytionSecret, encryptedFields: ['password']});
+// UserSchema.plugin(encrypt, {secret: encrytionSecret, encryptedFields: ['password']}); now this is commented to use hash only
 
 // crerating data model
 const User = mongoose.model('users', UserSchema);
@@ -51,7 +52,7 @@ app.get('/login', (req, res) => {
 app.post('/login', async (req, res) => {
     // getting the user infor form the body request
     const username = req.body.username;
-    const password = req.body.password;
+    const password = md5(req.body.password); // md5 is the hash function
 
     // now we check this info against our db
     try {
@@ -61,12 +62,13 @@ app.post('/login', async (req, res) => {
         if((foundUser.email === username) && (foundUser.password === password) ) {
             res.render('secrets.ejs')
         } else {
-            res.send('user not found or passowrd not correct')
-        }
+            res.render('login.ejs', {
+                warning: 'user or password are inncorrect'
+            });        }
     } catch (error) {
         console.log(error);
         res.render('login.ejs', {
-            warning: 'incorrect entries'
+            warning: 'couldnt find username'
         });
     }
 });
@@ -81,7 +83,7 @@ app.get('/register', (req, res) => {
 app.post('/register', (req, res) => {
     // to register a user with email and password, first we got those from the form
     const username = req.body.username; // this will get the email
-    const password = req.body.password; // this will get the password
+    const password = md5(req.body.password); // this will get the password, usign md5 hash encryption
 
     // now we save the user info to the db
     const newUser = new User({
@@ -95,7 +97,7 @@ app.post('/register', (req, res) => {
         res.render('secrets.ejs');
     } catch (error) {
         console.error(error);
-        res.redirect('/register');        
+        res.redirect('/registerj');        
     }
 });
 
