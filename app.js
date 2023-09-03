@@ -5,8 +5,9 @@ import express from 'express';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
 import encrypt from 'mongoose-encryption';
-import md5 from 'md5';
-
+// import md5 from 'md5'; we use bcrypt instead
+import bcrypt from 'bcrypt';
+const saltRounds = 10; // how many salt round we need to do to our password hashing
 // consts
 const app = express();
 const PORT = process.env.PORT;
@@ -52,25 +53,30 @@ app.get('/login', (req, res) => {
 app.post('/login', async (req, res) => {
     // getting the user infor form the body request
     const username = req.body.username;
-    const password = md5(req.body.password); // md5 is the hash function
+    // const password = md5(req.body.password); // md5 is the hash function
 
-    // now we check this info against our db
-    try {
-        const foundUser = await User.findOne({email:username}); // thie will search 
-        // console.log(foundUser.email);
-        // console.log(foundUser.password);
-        if((foundUser.email === username) && (foundUser.password === password) ) {
-            res.render('secrets.ejs')
-        } else {
+    // useing bcrypt.comare to see if the salted hash password exists in our db
+    // see bcrypt docs for more info
+    
+        // now we check this info against our db
+        try {
+            const foundUser = await User.findOne({email:username}); // thie will search 
+            bcrypt.compare(req.body.password, foundUser.password, async (err,compareResult) => {
+                 
+                if((foundUser.email === username) && (compareResult === true) ) {
+                    res.render('secrets.ejs')
+                } else {
+                    res.render('login.ejs', {
+                        warning: 'user or password are inncorrect'
+                    });
+                }
+            });
+        } catch (error) {
+            // console.log(error);
             res.render('login.ejs', {
-                warning: 'user or password are inncorrect'
-            });        }
-    } catch (error) {
-        console.log(error);
-        res.render('login.ejs', {
-            warning: 'couldnt find username'
-        });
-    }
+                warning: 'couldnt find username'
+            });
+        }
 });
 
 
@@ -83,22 +89,25 @@ app.get('/register', (req, res) => {
 app.post('/register', (req, res) => {
     // to register a user with email and password, first we got those from the form
     const username = req.body.username; // this will get the email
-    const password = md5(req.body.password); // this will get the password, usign md5 hash encryption
+    // const password = md5(req.body.password); // this will get the password, usign md5 hash encryption
 
-    // now we save the user info to the db
-    const newUser = new User({
+    // this functio, first arrg takes our password, second takes our salt rounds, then call back function to make get the hash results
+    bcrypt.hash(req.body.password, saltRounds, (err, hash) => {
+        // now we save the user info to the db
+        const newUser = new User({
         email: username,
-        password: password
+        password: hash
     });
-    // saving the user info
-    try {
+      // saving the user info
+      try {
         newUser.save();
         // so if there is no registration error the secret page will be shown
         res.render('secrets.ejs');
     } catch (error) {
         console.error(error);
         res.redirect('/registerj');        
-    }
+    }       
+    });
 });
 
 // logging out and going back home
