@@ -4,11 +4,16 @@ import 'dotenv/config' // good practice to put it at the top
 import express from 'express';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
-import encrypt from 'mongoose-encryption';
+// import encrypt from 'mongoose-encryption';
 // import md5 from 'md5'; we use bcrypt instead
-import bcrypt from 'bcrypt';
-const saltRounds = 10; // how many salt round we need to do to our password hashing
+// import bcrypt from 'bcrypt';
+import session from 'express-session';
+import passport from 'passport';
+import passportLocalMongoose from 'passport-local-mongoose';
+
+
 // consts
+// const saltRounds = 10; // how many salt round we need to do to our password hashing
 const app = express();
 const PORT = process.env.PORT;
 const dbURL = 'mongodb://localhost:27017/';
@@ -18,6 +23,16 @@ const encrytionSecret = process.env.SECRET_KEY;
 //midllewares
 app.use(express.static('./public'));
 app.use(bodyParser.urlencoded({extended: false}));
+// using express-session module and setting our options
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false
+}));
+// using the passport module
+app.use(passport.initialize());
+// setting the session with passport
+app.use(passport.session());
 
 //connecting to the db
 try {
@@ -31,12 +46,18 @@ const UserSchema = new mongoose.Schema({
     email: String,
     password: String
 });
-
-// before creating the model its important to use the encrytion plugin before the model
-// UserSchema.plugin(encrypt, {secret: encrytionSecret, encryptedFields: ['password']}); now this is commented to use hash only
+//plugging the passport-local to our data schema, we cloul do this without the passport local mongoose useing the passport module, see docs
+UserSchema.plugin(passportLocalMongoose);
 
 // crerating data model
 const User = mongoose.model('users', UserSchema);
+
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+
+// before creating the model its important to use the encrytion plugin before the model
+// UserSchema.plugin(encrypt, {secret: encrytionSecret, encryptedFields: ['password']}); now this is commented to use hash only
 
 // routing
 // home
@@ -49,71 +70,66 @@ app.get('/login', (req, res) => {
     res.render('login.ejs');
 });
 
-// exisitng user loggign page
-app.post('/login', async (req, res) => {
-    // getting the user infor form the body request
-    const username = req.body.username;
-    // const password = md5(req.body.password); // md5 is the hash function
 
-    // useing bcrypt.comare to see if the salted hash password exists in our db
-    // see bcrypt docs for more info
-    
-        // now we check this info against our db
-        try {
-            const foundUser = await User.findOne({email:username}); // thie will search 
-            bcrypt.compare(req.body.password, foundUser.password, async (err,compareResult) => {
-                 
-                if((foundUser.email === username) && (compareResult === true) ) {
-                    res.render('secrets.ejs')
-                } else {
-                    res.render('login.ejs', {
-                        warning: 'user or password are inncorrect'
-                    });
-                }
-            });
-        } catch (error) {
-            // console.log(error);
-            res.render('login.ejs', {
-                warning: 'couldnt find username'
-            });
-        }
+// logging out and going back home
+app.get('/logout', (req, res) => {
+    req.logout((err) => {
+        if (err) {
+            console.log(err);
+        } 
+    res.redirect('/');
+            
+        
+    });
 });
-
 
 // registration page (get)
 app.get('/register', (req, res) => {    
     res.render('register.ejs');
 });
 
+app.get('/secrets', (req, res) => {
+    if (req.isAuthenticated()) {
+        res.render('secrets.ejs');
+    } else {
+        res.redirect('/login');
+    }
+})
+
+// exisitng user loggign page
+app.post('/login', async (req, res) => {
+    
+    const user = new User({
+        username: req.body.username,
+        password: req.body.password
+    });
+
+    req.login(user, (err) => {
+        if (err) {
+            console.log(err);
+        } else {
+            passport.authenticate('local')(req, res, () => {
+                res.redirect('/secrets');
+            });
+        }
+    })
+});
+
 // register new user (post)
 app.post('/register', (req, res) => {
-    // to register a user with email and password, first we got those from the form
-    const username = req.body.username; // this will get the email
-    // const password = md5(req.body.password); // this will get the password, usign md5 hash encryption
-
-    // this functio, first arrg takes our password, second takes our salt rounds, then call back function to make get the hash results
-    bcrypt.hash(req.body.password, saltRounds, (err, hash) => {
-        // now we save the user info to the db
-        const newUser = new User({
-        email: username,
-        password: hash
-    });
-      // saving the user info
-      try {
-        newUser.save();
-        // so if there is no registration error the secret page will be shown
-        res.render('secrets.ejs');
-    } catch (error) {
-        console.error(error);
-        res.redirect('/registerj');        
-    }       
-    });
+    //regestring user name and password usign passport local mongooses package, this will make the hash and salt for us
+    User.register({username: req.body.username}, req.body.password, (err, newUser) => {
+        if (err) {
+            console.log(err);
+            res.redirect('/register');
+        } else {
+            passport.authenticate("local")(req, res, () => {
+                res.redirect('/secrets')
+            })
+        }
+    })
 });
 
-// logging out and going back home
-app.get('/logout', (req, res) => {
-    res.redirect('/');
-});
 
 
 //server port
@@ -137,3 +153,6 @@ app.listen(PORT, () => {
 
 // level 3 : hashing the password using md5 package 
 // user: user@hash, password hash123
+
+// level 4 : salting the has using bcrypt
+// user user@salt pass: salt123
